@@ -20,7 +20,7 @@ To get started, I went into my Oracle Cloud Infrastructure account and created a
 * CPU: 12 cores
 * CPU Memory: 180GB
 
-I specifically chose an OCI Custom Image as the default Operating System for my machine. The partner image that I chose is the following
+I specifically chose an OCI Custom Image (AI 'all-in-one' Data Science Image for GPU) as the default Operating System for my machine. The partner image that I chose is the following:
 
 ![selecting compute image](./images/select_custom_image.jpg)
 
@@ -92,12 +92,12 @@ It's important to choose the right parameters, as doing otherwise can cause terr
     
     > **Note**: YOLOv5 (and lots of Neural Networks) implement a function called **early stopping**, which will stop training before the specified number of epochs, if it can't find a way to improve the mAPs (Mean Average Precision) for any class.
 
-* `--batch`: the batch size. I set this to either 16 images per batch, or 32. Setting a lower value (and considering that my dataset already has 10.000 images) is usually a *bad practice* and can cause instability.
+* `--batch`: the batch size. I set this to either 16 images per batch, or 32. Setting a lower value (and considering that my dataset already has 10,000 images) is usually a *bad practice* and can cause instability.
 * `--lr`: I set the learning rate to 0.01 by default.
 * `--img` (image size): this parameter was probably the one that gave me the most trouble. I initially thought that all images -- if trained with a specific image size -- must always follow this size; however, you don't need to worry about this due to image subsampling and other techniques that are implemented to avoid this issue. This value needs to be the maximum value between the height and width of the pictures, averaged across the dataset.
 * `--save_period`: specifies how often the model should save a copy of the state. For example, if I set this to 25, it will create a YOLOv5 checkpoint that I can use every 25 trained epochs.
 
-> **Note**: if I have 1000 images with an average width of 1920 and height of 1080, I'll probably create a model of image size = 640, and subsample my images. If I have issues with detections, perhaps I'll create a model with a higher image size value, but training time will ramp up, and inference will also require more computing power.
+> **Note**: if I have 1,000 images with an average width of 1920 and height of 1080, I'll probably create a model of image size = 640, and subsample my images. If I have issues with detections, perhaps I'll create a model with a higher image size value, but training time will ramp up, and inference will also require more computing power.
 
 
 ### Which YOLOv5 checkpoint to choose from?
