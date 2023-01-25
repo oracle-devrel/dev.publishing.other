@@ -97,7 +97,7 @@ It's important to choose the right parameters, as doing otherwise can cause terr
 * `--img` (image size): this parameter was probably the one that gave me the most trouble. I initially thought that all images -- if trained with a specific image size -- must always follow this size; however, you don't need to worry about this due to image subsampling and other techniques that are implemented to avoid this issue. This value needs to be the maximum value between the height and width of the pictures, averaged across the dataset.
 * `--save_period`: specifies how often the model should save a copy of the state. For example, if I set this to 25, it will create a YOLOv5 checkpoint that I can use every 25 trained epochs.
 
-> **Note**: If I have 1,000 images with an average width of 1920 and height of 1080, I'll probably create a model of image size = 640, and subsample my images. If I have issues with detections, perhaps I'll create a model with a higher image size value, but training time will ramp up, and inference will also require more computing power.
+> **Note**: if I have 1,000 images with an average width of 1920 and height of 1080, I'll probably create a model of image size = 640, and subsample my images. If I have issues with detections, perhaps I'll create a model with a higher image size value, but training time will ramp up, and inference will also require more computing power.
 
 
 ### Which YOLOv5 checkpoint to choose from?
