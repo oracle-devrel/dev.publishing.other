@@ -3,262 +3,151 @@
 ## Introduction
 
 In this article, we're going to learn how to load a YOLOv5 model into PyTorch, and then augment the detections with three different techniques:
-1. Cropping and saving detections
-2. Counting Detected Objects
-3. Sorting Detections 
+1. Sorting Detections 
+2. Cropping and saving detections
+3. Counting Detected Objects
 
-If you're a little confused on how we did this from scratch, you can check out the first and second article (this article's predecessors) here:
+If you're a little confused on how we got here from the very beginning, you can check out the first and second article (this article's predecessors) here:
 
 - [Creating a CMask Detection Model on OCI with YOLOv5: Data Labeling with RoboFlow](https://medium.com/oracledevs/creating-a-cmask-detection-model-on-oci-with-yolov5-data-labeling-with-roboflow-5cff89cf9b0b)
 - [Creating a Mask Model on OCI with YOLOv5: Training and Real-Time Inference](https://medium.com/oracledevs/creating-a-mask-model-on-oci-with-yolov5-training-and-real-time-inference-3534c7f9eb21)
 
-Check them out if you're especially interested, as these previous articles will hugely clarify what we do and how we obtained the data and the mask detection model.
+Additionally, [I give you here a Kaggle link](https://www.kaggle.com/datasets/jasperan/covid-19-mask-detection/) where you can download the pre-trained weights file for the model itself. I'll appreciate any contribution that improves the model's mAP (Mean Average Precision).
 
-## Why is this necessary
-Build Custom PyTorch Code
+I recommend you check all these resources out, as these previous articles will hugely clarify what we do and how we obtained the data.
 
-    https://obsproject.com/forum/resources/obs-virtualcam.949/
+## Why PyTorch?
 
-    https://github.com/obsproject/obs-studio/issues/3635
+I decided to create a "modified" version of what YOLOv5 does, by taking advantage of Ultralytics' integration with PyTorch.
 
-    https://stackoverflow.com/questions/50916903/how-to-process-vlc-udp-stream-over-opencv/50917584#50917584
+I believed custom PyTorch code would be great, because simply using YOLOv5's repository didn't give you 100% flexibility and responsiveness (real-time), so I decided to __very slightly__ add some *extra* functionalities (we'll talk about them below). If you're trying to use [the standard GitHub repository for YOLOv5](https://github.com/ultralytics/yolov5), you'll find that you can use their code like [this detector](https://github.com/ultralytics/yolov5/blob/master/detect.py) to post-process video or image files. You can also use it directly with a YouTube video, and an integrated youtube downloader will download frames and process them.
 
-    https://obsproject.com/forum/threads/how-to-get-virtual-camera-data-using-opencv%EF%BC%9F.137113/
+But what is the definition of real time? I want every frame that I see in my computer, somehow (be it either a camera frame from my webcam or a YouTube video, or even my screen) to display the results of my detection immediately.
 
-    https://stackoverflow.com/questions/64391455/how-do-i-input-obs-virtual-cam-in-my-python-code-using-opencv
+This is why I created my own custom PyTorch detector.
 
-    https://www.reddit.com/r/computervision/comments/k6gxgo/use_obs_as_the_source_for_opencv/
+Finally, I'd like to mention my journey through a very painful road of finding __a few__ bugs on the Windows Operating System and trying to *virtualize* your webcam feed. There's this great plugin that could "replicate" your camera feed into a virtual version that you could use in any program (you could give your computer any program / input and feed it into the webcam stream, so that it looked like your webcam feed was coming from somewhere else), and it was really great:
 
-    https://github.com/opencv/opencv/issues/19746
+![OBS great outdated plugin](./images/obs_1.PNG)
 
-    https://obsproject.com/forum/resources/obs-virtualcam.949/
+This was an [OBS (Open Broadcaster Software)](https://obsproject.com/) plugin. OBS is the go-to program to use when you're planning to make a livestream. However, this plugin was discontinued in OBS version 28, and all problems came with this update. I prepared this bug-compilation image so you can feel the pain too:
+
+![OBS bug compilation](./images/obs_errors.PNG)
+
+So, once we've established that there are various impediments that prevent us from happily developing in a stable environment, let's start implementing.
+
+## Implementation
+
+We are going to focus on the three problems explained in the Introduction: cropping and saving objects, counting objects and sorting them. These techniques can be re-used in any computer vision projects, so once you understand how to implement them once, you're good to go.
+
+Technical requirements are Python 3.8 or higher, and PyTorch 1.7 or higher. [Here's a list](https://github.com/oracle-devrel/devo.publishing.other/custom_pytorch_yolov5/files/requirements.txt) of the project's requirements if you want to reuse the code (which you can find in [the GitHub repository](https://github.com/oracle-devrel/devo.publishing.other/custom_pytorch_yolov5)), along with everything we publish.
+
+### 0. General Setup
+
+First, we will use the `argparse` to include additional parameters to our Python script. I added three optional parameters:
+
+![argparse](./images/argparse.PNG)
+
+> **Note**: the confidence threshold will only display detected objects if the confidence score of the model's prediction is higher than a given value (0-1).
+
+These parameters' default can be modified. The frequency parameter will determine how many frames to detect (e.g. a frame step). If the user specifies any number, then only one frame every N frames will be used for detection. This can be useful if you're expecting your data to be very similar within different sequential frames, as one detection of the object will probably suffice. Specifying this frame step is also beneficial to avoid cost overages when making these predictions (electricity bill beware) or OCI costs if you're using the Cloud.
+
+After this initial configuration, we're ready to load our custom model. You can find the pre-trained custom model's weights for the Mask Detection Model being featured in this article [in this link](https://www.kaggle.com/datasets/jasperan/covid-19-mask-detection?select=best.pt). You'll need to have this file within reach for your Python code to work.
+
+So, what we do now, is load the custom weights file: 
+
+![loading PyTorch model](./images/load_model.PNG)
+> **Note**: we specify the model as a custom YOLO detector, and give it the model's weights file as input.
+
+Now, we're ready to get started. We create our main loop, which infinitely gets a new image from the input (in our case, either a webcam feed or a screenshot of what we're seeing in our screen) and displays it with the bounding box detections in place:
+
+![main loop](./images/main_loop.PNG)
+
+The most important function in that code is the `infer()` function, which returns an image and the result object, transformed into a pandas object for your convenience.
+
+![infer 1](./images/infer_1.PNG)
+
+In this first part of the function, we obtain a new image from the OpenCV video capture object. You can also find a similar implementation but by taking screenshots, instead of using the webcam feed in [this file](https://github.com/oracle-devrel/devo.publishing.other/custom_pytorch_yolov5/files/lightweight_screen_torch_inference.py) 
+
+Now, we need to pass this to our Torch model, which will return bounding box results. However, there's an important consideration to make: since we want our predictions to be as fast as possible, and we know that the mask detection model has been trained with thousands of images of all shapes and sizes, we can consider a technique which will benefit Frames Per Second (FPS) on our program: **rescaling** images into a lower resolution (since my webcam feed had 1080p resolution, and I use a 2560x1440 monitor which causes screenshots to be too detailed, more than I need). 
+For this, I chose a `SCALE_FACTOR` variable to hold this value (between 0-1). Currently, all images will be downscaled to 640 pixels in width and the respective resolution in height, to maintain the original image's aspect ratio.
+
+![infer 2](./images/infer_2.PNG)
+
+Now that we have our downscaled image, we pass it to the model, and it returns the object we wanted:
+
+![infer 3](./images/infer_3.PNG)
+> **Note**: the `size=640` option tells the model we're going to pass it images with that width, so the model will predict results from that width too.
+
+The last thing we do is draw the bounding boxes from 
+
+![infer return](./images/infer_5.PNG)
 
 
-3 implementations in one:
-## Cropping & Saving Detections
+## 1. Sorting Detections
 
-## Counting Detected Objects
+This first technique is the simplest, and can be useful to add value to the standard YOLO functionality in an unique way. The idea is to quickly manipulate the PyTorch-pandas object to sort values according to one of the columns. 
 
-## Sorting Detections
+For this, I suggest two ideas: sorting by confidence score, or by detection coordinates. To illustrate how any of these techniques are useful, let's think of the following image: 
 
+![speed figure](./images/figure_speed.png)
+> **Note**: this image was produced by [Muhammad Moin](https://www.linkedin.com/in/muhammad-moin-7776751a0/) and illustrates how sorting detections can be useful.
 
+In the image above, an imaginary line is drawn between both sides of the roadway, in this case _horizontally_. Any object passing from one equator to the other in a specific direction is counted as an "inward" or "downward" vehicle. This can be achieved by specifying (x,y) bounds, and any item in the PyTorch-pandas object that surpasses it in any direction is detected.
+For processing purposes, sorting these values from the lowest y coordinate to the highest will return all cars in-order, from top to bottom of the image, which facilitates their processing in an ordered manner. 
+
+### 2. Cropping & Saving Detections
+
+With this second technique, we just need to crop the detected area we want and save it.
+
+It's useful because we can manipulate or use the cropped image of an object, instead of the whole image instead, and use this to our advantage. As an example, you could:
+1. Crop images where you detect text
+2. Give this cropped image to an Optical Character Recognition (OCR) program
+3. Extract the text in real-time
+
+![bmw license plate](./images/bmw_car.PNG)
+> **Note**: this is an example of a car's license plate being passed through an OCR in Keras. Credits to [Theophilebuyssens](https://medium.com/@theophilebuyssens).
+
+This approach wouldn't work if we gave the whole image to the OCR, as it wouldn't be able to distinguish small texts, unless the image's resolution was very high (which in most cases isn't the case, especially in surveillance cameras).
+
+To implement this, we will base everything we do on **bounding boxes**. Our PyTorch code will return an object with bounding box coordinates for detected objects (and the detection's confidence scores), and we will use this object to create newly cropped images with the bounding box sizes.
+> **Note**: you can always modify the range of pixels you want to crop in each image, by being either more permissive (getting extra pixels around the bounding box) or more restrictiv, removing the edges of the detected object.
+
+An important consideration is that, since we're passing images to our model with a width of 640 pixels, we need to keep our previously-mentioned `SCALE_FACTOR` variable. The problem is that the original image has a bigger size than the downscaled image (the one we pass the model), so bounding box detections will also be downscaled. We need to multiply these detections by the scale factor in order to _draw_ these bounding boxes over the original image; and then display it:
+
+![infer 4](./images/infer_4.PNG)
+
+We use the `save_cropped_images()` function to save images, while also accounting for the frequency parameter we set: we'll only save the cropped detections in case the frame is one we're supposed to save.
+Inside this function, we will **upscale** bounding box detections. Also, we'll only save the image if the detected image is higher than (x,y) width and height:
+
+![save cropped images](./images/save_cropped_images.PNG)
+
+Last thing we do is save the cropped image with OpenCV:
+
+![save image](./images/save_image.PNG)
+
+And we successfully implemented the functionality.
+
+## 3. Counting Detected Objects
+
+This last technique we're going to learn about is very straightforward and easy to implement: since we want to count the number of detected objects in the screen, we need to use a global variable (in memory) or a database of some sort to store this variable. We can either design the variable to either:
+1. Always increment, and keep a global value of all detected objects since we started executing our Python program
+2. Only hold the value of currently detected objects in the screen
+
+Depending on the problem, you may want to choose one of these two options. In our case, we'll implement the second option:
+
+![draw 2](./images/draw_1.PNG)
+> **Note**: to implement the first option, you just need to *increment* the variable every time, instead of setting it. However, you might benefit from looking at implementations like [DeepSORT](https://github.com/ZQPei/deep_sort_pytorch) or [Zero-Shot Tracking](https://github.com/roboflow/zero-shot-object-tracking), which is able to recognize the same object/detection from sequential frames, and only count them as one; not separate entities. 
+
+With our newly-created global variable, we'll hold a value of our liking. For example, in the code above, I'm detecting the _`mask`_ class. Then, I just need to draw the number of detected objects with OpenCV, along with the bounding boxes on top of the original image:
+
+![draw 1](./images/draw_2.PNG)
 
 ## Conclusions
 
-Include model weights in github and reference this for people to use the already-trained model
+I've shown three additional features not currently present in YOLO models, by just adding a Python layer to it. PyTorch's Model Hub made this possible, as well as RoboFlow (made creating and exporting the mask detection model easy).
 
-
-
-
-
-
-
-## Introduction
-
-If you remember [an article I wrote a few weeks back](https://medium.com/oracledevs/creating-a-cmask-detection-model-on-oci-with-yolov5-data-labeling-with-roboflow-5cff89cf9b0b), I created a Computer Vision model able to recognize whether someone was wearing their COVID-19 mask correctly, incorrectly, or simply didn't wear any mask.
-
-Now, as a natural continuation of this topic, I'll show you how you can train the model using Oracle Cloud Infrastructure (OCI). This applies to any object detection model created using the YOLO (You Only Look Once) standard and format.
-
-At the end of the article, you'll see the end result of performing inference (on myself):
-
-![selecting compute image](./images/screenshot_yt.jpg)
-
-## Hardware?
-
-To get started, I went into my Oracle Cloud Infrastructure account and created a Compute instance. These are the specifications for the project:
-
-* Shape: VM.GPU3.2
-* GPU: 2 NVIDIA® Tesla® V100 GPUs ready for action.
-* GPU Memory: 32GB
-* CPU: 12 cores
-* CPU Memory: 180GB
-
-I specifically chose an OCI Custom Image (AI 'all-in-one' Data Science Image for GPU) as the default Operating System for my machine. The partner image that I chose is the following:
-
-![selecting compute image](./images/select_custom_image.jpg)
-
-> **Note**: this custom image is very useful and often saves me a lot of time. It already has 99% of the things that I need to work on in any Data Science-related project. So, no installation/setup wasted time before getting to work. (It includes things like conda, CUDA, PyTorch, a Jupyter environment, VSCode, PyCharm, git, Docker, the OCI CLI... and much more. Make sure to read the [full custom image specs here](https://cloud.oracle.com/marketplace/application/74084544/usageInformation)).
-
-### Price Comparison
-
-The hardware that we're going to work with is [very expensive](https://www.amazon.com/PNY-TCSV100MPCIE-PB-Nvidia-Tesla-v100/dp/B076P84525), which nobody is expected to have access to in their homes. Nobody that I know has a $15,000 graphics card (if you know someone let me know), and this is where Cloud can really help us. OCI gives us access to these amazing machines for a fraction of the cost that you would find from a competitor.
-
-For example, I rented both NVIDIA V100s *just for **$2.50/hr***, and I'll be using these GPUs to train my models.
-
-> **Note**: Be mindful of the resources you use in OCI. Just like other Cloud providers, once you allocate a GPU in your Cloud account, you will still be charged for the use even if it's idle. So, remember to terminate your GPU instances when you're finished to avoid overcharges!
-
-[Here's a link](https://www.oracle.com/cloud/price-list/) to the full OCI price list if you're curious.
-
-## Training the Model with YOLOv5
-
-Now I have my compute instance ready. And since I have almost no configuration overheads (I'm using the custom image), I can get straight to business.
-
-Before getting ready to train the model, I have to clone YOLOv5's repository:
-
-```console
-git clone https://github.com/ultralytics/yolov5.git
-```
-
-And finally, install all dependencies into my Python environment:
-
-```console
-cd /home/$USER/yolov5
-pip install -r /home/$USER/yolov5/requirements.txt
-```
-
-> **Note**: YOLOv8 was just released. I thought, "why not change directly to YOLOv8, since it's basically an improved version of YOLOv5?" But I didn't want to overcomplicate things -- for future content, I'll switch to YOLOv8 and show you why it's better than the version we are using for this article!
-
-
-### Downloading my Dataset
-
-[The model](https://universe.roboflow.com/jasperan/public-mask-placement) is public and freely available for anyone who wants to use it:
-
-![Model Link](./images/universe_roboflow.jpg)
-
-
-> **Note**: thanks to RoboFlow and their team, you can even [test the model in your browser](https://universe.roboflow.com/jasperan/public-mask-placement/model/4) (uploading your images/videos) or with your webcam!
-
-I exported my model from RoboFlow in the YOLOv5 format. This downloaded my dataset into a ZIP file, including three different directories: training, testing, and validation, each with their corresponding image sets.
-
-I pushed the dataset into my compute instance using FTP (File Transfer Protocol) and unzipped it:
-
-![unzipping](./images/unzipping.jpg)
-
-![dataset contents](./images/dataset_contents.jpg)
-
-Additionally, we have the `data.yaml` file containing the dataset's metadata.
-
-To avoid absolute/relative path issues with my dataset, I also want to modify `data.yaml` and insert the *absolute* paths where all images (from training, validation, and testing sets) are found since by default they contain the relative path:
-
-![dataset contents](./images/absolute_paths.jpg)
-
-Now, we're almost ready for training.
-
-### Training Parameters
-
-We're ready to make a couple of extra decisions regarding which parameters we'll use during training.
-
-It's important to choose the right parameters, as doing otherwise can cause terrible models to be created (the word *terrible* is intentional). So, let me explain what's important about training parameters. Official documentation can be found [here](https://docs.ultralytics.com/config/).
-
-* `--device`: specifies which CUDA device (or by default, CPU) we want to use. Since I have two GPUs, I'll want to use both for training. I'll set this to "0,1", which will perform **distributed training**, although not in the most optimal way. (I'll make an article in the future on how to properly do Distributed Data Parallel with PyTorch).
-* `--epochs`: the total number of epochs we want to train the model for. If the model doesn't find an improvement during training. I set this to 3000 epochs, although my model converged very precisely long before the 3000th epoch was done.
-    
-    > **Note**: YOLOv5 (and lots of Neural Networks) implement a function called **early stopping**, which will stop training before the specified number of epochs, if it can't find a way to improve the mAPs (Mean Average Precision) for any class.
-
-* `--batch`: the batch size. I set this to either 16 images per batch, or 32. Setting a lower value (and considering that my dataset already has 10,000 images) is usually a *bad practice* and can cause instability.
-* `--lr`: I set the learning rate to 0.01 by default.
-* `--img` (image size): this parameter was probably the one that gave me the most trouble. I initially thought that all images -- if trained with a specific image size -- must always follow this size; however, you don't need to worry about this due to image subsampling and other techniques that are implemented to avoid this issue. This value needs to be the maximum value between the height and width of the pictures, averaged across the dataset.
-* `--save_period`: specifies how often the model should save a copy of the state. For example, if I set this to 25, it will create a YOLOv5 checkpoint that I can use every 25 trained epochs.
-
-> **Note**: if I have 1,000 images with an average width of 1920 and height of 1080, I'll probably create a model of image size = 640, and subsample my images. If I have issues with detections, perhaps I'll create a model with a higher image size value, but training time will ramp up, and inference will also require more computing power.
-
-
-### Which YOLOv5 checkpoint to choose from?
-
-The second and last decision we need to make is which YOLOv5 checkpoint we're going to start from. It's **highly recommended** that you start training from one of the five possible checkpoints:
-
-![yolov5 checkpoints](./images/yolov5_performance.jpg)
-
-> **Note**: you can also start training 100% from scratch, but you should only do this if what you're trying to detect has never been reproduced before, e.g. astrophotography. The upside of using a checkpoint is that YOLOv5 has already been trained up to a point, with real-world data. So, anything that resembles the real world can easily be trained from a checkpoint, which will help you reduce training time (and therefore expense).
-
-The higher the accuracy from each checkpoint, the more parameters it contains. Here's a detailed comparison with all available pre-trained checkpoints:
-
-| Model | size<br><sup>(pixels)</sup> | Mean Average Precision<sup>val<br>50-95</sup> | Mean Average Precision<sup>val<br>50</sup> | Speed<br><sup>CPU b1<br>(ms)</sup> | Speed<br><sup>V100 b1<br>(ms)</sup> | Speed<br><sup>V100 b32<br>(ms)</sup> | Number of parameters<br><sup>(M)</sup> | FLOPs<br><sup>@640 (B)</sup> |
-| ----- | ------------ | ------------------------------ | --------------------------- | --------------- | ---------------- | ----------------- | ----------------------- | ------------- |
-| [YOLOv5n](https://github.com/ultralytics/yolov5/releases/download/v6.2/yolov5n.pt) | 640 | 28.0 | 45.7 | **45** | **6.3** | **0.6** | **1.9** | **4.5** |
-| [YOLOv5s](https://github.com/ultralytics/yolov5/releases/download/v6.2/yolov5s.pt) | 640 | 37.4 | 56.8 | 98 | 6.4 | 0.9 | 7.2 | 16.5 |
-| [YOLOv5m](https://github.com/ultralytics/yolov5/releases/download/v6.2/yolov5m.pt) | 640 | 45.4 | 64.1 | 224 | 8.2 | 1.7 | 21.2 | 49.0 |
-| [YOLOv5l](https://github.com/ultralytics/yolov5/releases/download/v6.2/yolov5l.pt) | 640 | 49.0 | 67.3 | 430 | 10.1 | 2.7 | 46.5 | 109.1 |
-| [YOLOv5x](https://github.com/ultralytics/yolov5/releases/download/v6.2/yolov5x.pt) | 640 | 50.7 | 68.9 | 766 | 12.1 | 4.8 | 86.7 | 205.7 |
-|  |  |  |  |  |  |  |  |  |
-| [YOLOv5n6](https://github.com/ultralytics/yolov5/releases/download/v6.2/yolov5n6.pt) | 1280 | 36.0 | 54.4 | 153 | 8.1 | 2.1 | 3.2 | 4.6 |
-| [YOLOv5s6](https://github.com/ultralytics/yolov5/releases/download/v6.2/yolov5s6.pt) | 1280 | 44.8 | 63.7 | 385 | 8.2 | 3.6 | 12.6 | 16.8 |
-| [YOLOv5m6](https://github.com/ultralytics/yolov5/releases/download/v6.2/yolov5m6.pt) | 1280 | 51.3 | 69.3 | 887 | 11.1 | 6.8 | 35.7 | 50.0 |
-| [YOLOv5l6](https://github.com/ultralytics/yolov5/releases/download/v6.2/yolov5l6.pt) | 1280 | 53.7 | 71.3 | 1784 | 15.8 | 10.5 | 76.8 | 111.4 |
-| [YOLOv5x6](https://github.com/ultralytics/yolov5/releases/download/v6.2/yolov5x6.pt)<br>+[TTA](https://github.com/ultralytics/yolov5/issues/303) | 1280<br>1536 | 55.0<br>**55.8** | 72.7<br>**72.7** | 3136<br>- | 26.2<br>- | 19.4<br>- | 140.7<br>- | 209.8<br>- |
-
-> **Note**: all checkpoints have been trained for 300 epochs with the default settings (find all of them [in the official docs](https://docs.ultralytics.com/config/)). The nano and small version use [these hyperparameters](https://github.com/ultralytics/yolov5/blob/master/data/hyps/hyp.scratch-low.yaml), all others use [these](https://github.com/ultralytics/yolov5/blob/master/data/hyps/hyp.scratch-high.yaml).
-
-Also note that -- if we want to create a model with an image size > 640 -- we should select the corresponding YOLOv5 checkpoints (those that end in the number `6`).
-
-So, for this model, since I will use 640 pixels, I'll just create a first version using **YOLOv5s**, and another one with **YOLOv5x**. You only need to train one, but I was curious and wanted to see how each model differs in the end when applying it to the same video.
-
-### Training
-
-Now, we just need to run the following commands...
-
-```console
- # for yolov5s
-python train.py --img 640 --data ./datasets/y5_mask_model_v1/data.yaml --weights yolov5s.pt --name y5_mask_detection  --save-period 25 --device 0,1 --batch 16 --epochs 3000
-
-# for yolov5x
-python train.py --img 640 --data ./datasets/y5_mask_model_v1/data.yaml --weights yolov5x.pt --name y5_mask_detection  --save-period 25 --device 0,1 --batch 16 --epochs 3000
-```
-
-...and the model will start training. Depending on the size of the dataset, each epoch will take more or less time. In my case, with 10.000 images, each epoch took about 2 minutes to train and 20 seconds to validate.
-
-![Training GIF](./images/training.gif)
-
-For each epoch, we will have broken-down information about epoch training time and mAP for the model, so we can see how our model progresses over time. 
-
-After the training is done, we can have a look at the results. The visualizations are provided automatically, and they are pretty similar to what I found using RoboFlow Train in the last article. I looked at the most promising graphs:
-
-![Number of instances per class](./images/num_instances.jpg)
-
-> **Note**: this means that both the `incorrect` and `no mask` classes are underrepresented if we compare them to the `mask` class. An idea for the future is to increase the number of examples for both these classes.
-
-The confusion matrix tells us how many predictions from images in the validation set were correct, and how many weren't:
-
-![confusion matrix](./images/confusion_matrix.jpg)
-
-
-As I've previously specified my model to auto-save every 25 epochs, the resulting directory is about 1GB. I only care about the best-performing model out of all the checkpoints, so I keep _`best.pt`_ (the model with the highest mAP of all checkpoints) and delete all others.
-
-The model took **168** epochs to finish (early stopping happened, so it found the best model at the 68th epoch), with an average of **2 minutes and 34 seconds** per epoch.
-
-![results](./images/results.jpg)
-
-
-## YOLOv5 Inference
-
-Now that we have the model, it's time to use it. In this article, we're only going to cover how to use the model via the YOLOv5 interface; I will prepare a custom PyTorch inference detector for the next article.
-
-To run inference on our already-generated model, we save the path of the `best.pt` PyTorch model and execute:
-
-```console
-# for a youtube video
-python detect.py --weights="H:/Downloads/trained_mask_model/weights/best.pt" --source="<YT_URL>" --line-thickness 1 --hide-conf --data=data.yaml"
-
-# for a local video
-python detect.py --weights="H:/Downloads/trained_mask_model/weights/best.pt" --source="example_video.mp4" --line-thickness 1 --hide-conf --data=data.yaml"
-```
-
-> **Note**: it's important to specify the data.yaml file (containing the dataset's metadata) and the pre-trained weights we have obtained from our model training. Also, you can change the default line width provided by YOLO using the --line-thickness option.
-
-
-The source of the model can be any of the following:
-
-- A YouTube video
-- Local MP4 / MKV file 
-- Directory containing individual images
-- Screen input (takes screenshots of what you're seeing)
-- HTTP or Twitch streams (RTMP, RTSP)
-- Webcam
-
-## Results!
-
-I prepared this YouTube video to check the difference in detection (against the same video) from the two models I've trained:
-
-[![YouTube Video](./images/thumbnail.jpg)](https://www.youtube.com/watch?v=LPRrbPiZ2X8)
-
-## Conclusions
-
-The accuracy of both models is pretty good, and I'm happy with the results. The model performs a bit worse when you give it media where there are several people in the video/image, but still performs well.
-
-In the next article, I'll create a custom PyTorch inference detector (and explain the code) which will let us personalize everything we see -- something that the standard YOLO framework doesn't give us -- and also explain how to get started with distributed model training.
-
-If you'd like to see any special use cases or features implemented in the future, let me know in the comments!
-
+In the future, I'm planning on releasing an implementation with either DeepSORT or Zero-Shot Tracking, together with YOLO, to track objects. If you'd like to see any additional use cases or features implemented, let me know in the comments!
 
 If you’re curious about the goings-on of Oracle Developers in their natural habitat like me, come join us [on our public Slack channel!](https://bit.ly/odevrel_slack) We don’t mind being your fish bowl 🐠.
 
@@ -267,4 +156,4 @@ Stay tuned...
 ## Acknowledgments
 
 * **Author** - [Nacho Martinez](https://www.linkedin.com/in/ignacio-g-martinez/), Data Science Advocate @ Oracle Developer Relations
-* **Last Updated By/Date** - January 23rd, 2023
+* **Last Updated By/Date** - February 7th, 2023
