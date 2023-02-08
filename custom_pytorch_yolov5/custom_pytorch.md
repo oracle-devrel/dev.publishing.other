@@ -87,7 +87,7 @@ This first technique is the simplest, and can be useful to add value to the stan
 
 For this, I suggest two ideas: sorting by confidence score, or by detection coordinates. To illustrate how any of these techniques are useful, let's look at the following image: 
 
-![speed figure](./images/figure_speed.PNG)
+![speed figure](./images/figure_speed.png)
 > **Note**: this image illustrates how sorting detections can be useful. [(image credits)](https://www.linkedin.com/in/muhammad-moin-7776751a0/)
 
 In the image above, an imaginary line is drawn between both sides of the roadway, in this case **horizontally**. Any object passing from one equator to the other in a specific direction is counted as an "inward" or "downward" vehicle. This can be achieved by specifying (x,y) bounds, and any item in the PyTorch-pandas object that surpasses it in any direction is detected.
