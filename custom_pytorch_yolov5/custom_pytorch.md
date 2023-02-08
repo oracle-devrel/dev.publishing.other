@@ -146,7 +146,7 @@ As an example, I created this GIF.
 ![myself](./images/myself.gif)
 
 
-Note that I tested this on my own computer with an RTX 3080, I got about 25 FPS **with no downscaling** of images (I used their standard resolutions of 2560x1440). If you use downscaling you'll notice huge improvements in FPS.
+Note that I tested this on my own computer with an RTX 3080 graphics card, and I got about 25 FPS **with no downscaling** of images (I used my screen's standard resolution of 2560x1440). If you use downscaling on top of this, you'll notice huge improvements in FPS.
 
 ## Conclusions
 
