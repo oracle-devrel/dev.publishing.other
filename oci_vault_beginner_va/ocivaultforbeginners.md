@@ -29,7 +29,7 @@ The encryption algorithms that the Vault service supports for vault master encry
 
 #### Wrapping Keys
 
-Oracle offers an array of inherent security features, and wrapping keys is a good example. This type of encryption key comes included with each vault by default! Despite that rhyme, it’s a _wrapping_ key, not a rapping key. A wrapping key is a 4096-bit asymmetric encryption key based on the RSA algorithm. The public and private key pair do not count against service limits. They also do not incur service costs. You use the public key as the key encryption key when you need to wrap key material for import into the Vault service. You cannot create, delete, or rotate wrapping keys.
+Oracle offers an array of inherent security features, and "wrapping keys" are a good example. This type of encryption key comes included with each vault by default! Despite that rhyme, it’s a _wrapping_ key, not a rapping key. A wrapping key is a 4096-bit asymmetric encryption key based on the RSA algorithm. The public and private key pair do not count against service limits. They also do not incur service costs. You use the public key as the key encryption key when you need to wrap key material for import into the Vault service. You cannot create, delete, or rotate wrapping keys.
 
 #### Encryption Keys
 
