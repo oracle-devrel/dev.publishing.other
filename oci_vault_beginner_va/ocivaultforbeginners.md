@@ -1,7 +1,8 @@
+---
 title: OCI Vault Basics for Beginners
 parent: [tutorials]
 date: 2023-04-14 12:00
-
+---
 Chances are you have a set of keys on you, or nearby. It’s a comforting thought that we can control access to our vehicle, home, post box, or anything needing a key by just reaching into a pocket and grabbing our keys. That idea is quite similar to how OCI Vault was designed. A sort of “central store” of keys for cloud operations, allowing users or an API to access what is needed without messing about with unsecured text files or personal password managers. Yes, tools like personal password managers are useful, but at scale we need a way to authenticate both automated and manual processes in a secure way without constantly regenerating new keys.
 
 ![vault architecture](vault_illustration.png)
